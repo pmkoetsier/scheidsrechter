@@ -10,6 +10,7 @@ import pygad
 duur_wedstrijd = 1.5
 niet_fluiten_voor_wedstrijd = 1
 reistijd = 1
+maxtefluitenperdag = 3
 thuisclub = 'ODIK'
 te_fluiten_teams = ['ODIK 5', 'ODIK 6', 'ODIK 7', 'ODIK A2', 'ODIK A3', 'ODIK B2', 'ODIK C2', 'ODIK C3', 'ODIK D1', 'ODIK D2', 'ODIK D3', 'ODIK D4', 'ODIK E1', 'ODIK E2', 'ODIK E3', 'ODIK E4', 'ODIK F1', 'ODIK F2', 'ODIK MW1' ]
 teams_beschikbaar = ['ODIK 3', 'ODIK 4','ODIK 5', 'ODIK 6', 'ODIK 7', 'ODIK A2', 'ODIK A3']
@@ -17,7 +18,7 @@ teams_beschikbaar = ['ODIK 3', 'ODIK 4','ODIK 5', 'ODIK 6', 'ODIK 7', 'ODIK A2',
 #import data
 wedstrijden = pd.read_excel(r'2020-2021 VELD NAJAAR - min.xlsx', sheet_name='Blad1', parse_dates=[['Wedstrijddatum','Aanvangstijd']])
 
-#Thuis of uit, als thuis dat True?
+#Thuis of uit, als thuis dan true
 wedstrijden['Thuiswedstrijd'] = wedstrijden['Thuis team'].str.contains(thuisclub, na=True)
 
 #toevoegen grenzen aan data
@@ -29,6 +30,7 @@ wedstrijden['fluiten'] = wedstrijden['Thuis team'].isin(te_fluiten_teams)
 
 # selector voor wedstrijden
 wedstrijdenberekenen = wedstrijden.loc[(wedstrijden['fluiten'] == True)].copy()
+wedstrijdenberekenen.Wedstrijddatum_Aanvangstijd.apply(lambda dt: dt.date()).groupby([ wedstrijdenberekenen.Wedstrijddatum_Aanvangstijd.apply(lambda dt: dt.strftime('%Y-%m-%d'))]).count()
 
 def fitness_func(solution, solution_idx):
     # Calculating the fitness value of each solution in the current population.
@@ -36,11 +38,11 @@ def fitness_func(solution, solution_idx):
     x = 0
     fitness = 0
     for scheidsrechter in solution:
-
+        #Checken of het toegewezen team kan fluiten op dit moment
         wedstrijddag = wedstrijdenberekenen.iloc[x].Wedstrijddatum_Aanvangstijd
         scheidsrechtervol = teams_beschikbaar[int(solution[x])]
         scheidsrechterzelfspelen = wedstrijden.loc[(wedstrijden['Wedstrijddatum_Aanvangstijd'].dt.strftime('%Y-%m-%d') == wedstrijddag.strftime('%Y-%m-%d')) & (wedstrijden['Team'] == scheidsrechtervol)]
-
+        #Als ze helemaal niet hoeven te spelen die dag
         if len(scheidsrechterzelfspelen.index) == 0:
             fitness += 1
         elif scheidsrechterzelfspelen.iloc[0].fluiten_tot >= wedstrijdenberekenen.iloc[x].Wedstrijddatum_Aanvangstijd or wedstrijdenberekenen.iloc[x].Wedstrijddatum_Aanvangstijd >= scheidsrechterzelfspelen.iloc[0].fluiten_vanaf:
@@ -48,19 +50,18 @@ def fitness_func(solution, solution_idx):
         else:
             fitness += -10000
 
-
+        #max aantal te fluiten wedstrijden per dag onder limiet toetsen
+        scheidsrechterdatummatrix =
         x += 1
+
 
     return fitness
 
 fitness_function = fitness_func
 
-num_generations = 25 # Number of generations.
+num_generations = 1 # Number of generations.
 num_parents_mating = 7 # Number of solutions to be selected as parents in the mating pool.
 
-# To prepare the initial population, there are 2 ways:
-# 1) Prepare it yourself and pass it to the initial_population parameter. This way is useful when the user wants to start the genetic algorithm with a custom initial population.
-# 2) Assign valid integer values to the sol_per_pop and num_genes parameters. If the initial_population parameter exists, then the sol_per_pop and num_genes parameters are useless.
 sol_per_pop = 50 # Number of solutions in the population.
 num_genes = int(wedstrijdenberekenen['fluiten'].count())
 gene_space = [0,1,2,3,4,5,6]
