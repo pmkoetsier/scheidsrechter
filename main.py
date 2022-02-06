@@ -13,7 +13,10 @@ reistijd = 1
 maxtefluitenperdag = 3
 thuisclub = 'ODIK'
 te_fluiten_teams = ['ODIK 5', 'ODIK 6', 'ODIK 7', 'ODIK A2', 'ODIK A3', 'ODIK B2', 'ODIK C2', 'ODIK C3', 'ODIK D1', 'ODIK D2', 'ODIK D3', 'ODIK D4', 'ODIK E1', 'ODIK E2', 'ODIK E3', 'ODIK E4', 'ODIK F1', 'ODIK F2', 'ODIK MW1' ]
-teams_beschikbaar = ['ODIK 3', 'ODIK 4','ODIK 5', 'ODIK 6', 'ODIK 7', 'ODIK A2', 'ODIK A3']
+te_fluiten_teams_senior = ['ODIK 5', 'ODIK 6', 'ODIK 7', 'ODIK MW1']
+teams_beschikbaar = ['ODIK 3', 'ODIK 4','ODIK 5', 'ODIK 6', 'ODIK 7', 'ODIK A2', 'ODIK A3', 'ODIK MW1']
+teams_beschikbaar_junior = ['ODIK A2', 'ODIK A3']
+
 
 #import data
 wedstrijden = pd.read_excel(r'2020-2021 VELD NAJAAR - min.xlsx', sheet_name='Blad1', parse_dates=[['Wedstrijddatum','Aanvangstijd']])
@@ -40,6 +43,7 @@ def fitness_func(solution, solution_idx):
     x = 0
     fitness = 0
     start_time = time.time()
+    #TODO: parallel processing implementeren
     for i in range(len(solution)):
         #Checken of het toegewezen team kan fluiten op dit moment
         wedstrijddag = wedstrijdenberekenen.iloc[i].Wedstrijddatum_Aanvangstijd
@@ -55,7 +59,7 @@ def fitness_func(solution, solution_idx):
         else:
             fitness += -10000
 
-
+        # TODO: toevoegen dat jeugdteams alleen bepaalde teams kunnen fluiten
     wedstrijdenberekenen.loc[:, 'Scheidsrechter'] = solution
 
     scheidsrechterdatummatrix = pd.crosstab(wedstrijdenberekenen.Wedstrijddatum_Aanvangstijd.apply(lambda dt: dt.strftime('%Y-%m-%d')),wedstrijdenberekenen.Scheidsrechter)
@@ -65,7 +69,8 @@ def fitness_func(solution, solution_idx):
             fitness += -100000
 
     #Checken wat de variatie is tussen de teams in aantal te fluiten wedstrijden
-    fitness += -statistics.variance(scheidsrechterdatummatrix.sum())
+    fitness += 1/statistics.variance(scheidsrechterdatummatrix.sum())
+    # TODO: Toevoegen variatie tussen senioren
 
     return fitness
 
@@ -76,7 +81,9 @@ num_parents_mating = 7 # Number of solutions to be selected as parents in the ma
 
 sol_per_pop = 20 # Number of solutions in the population.
 num_genes = int(wedstrijdenberekenen['fluiten'].count())
-gene_space = [0,1,2,3,4,5,6]
+
+#todo: gene_space laten berekenen op basis van input
+gene_space = [0,1,2,3,4,5,6,7]
 
 last_fitness = 0
 def callback_generation(ga_instance):
@@ -91,7 +98,8 @@ ga_instance = pygad.GA(num_generations=num_generations,
                        num_genes=num_genes,
                        on_generation=callback_generation,
                        gene_space=gene_space,
-                       stop_criteria=["reach_1", "saturate_30"])
+                       stop_criteria=["reach_2", "saturate_15"]
+                       )
 
 # Running the GA to optimize the parameters of the function.
 ga_instance.run()
