@@ -1,4 +1,3 @@
-import datetime
 import time
 start_time = time.time()
 
@@ -6,9 +5,10 @@ import pandas as pd
 import datetime as dt
 import numpy as np
 import pygad
+import statistics
 
 duur_wedstrijd = 1.5
-niet_fluiten_voor_wedstrijd = 1
+niet_fluiten_voor_wedstrijd = 0
 reistijd = 1
 maxtefluitenperdag = 3
 thuisclub = 'ODIK'
@@ -30,39 +30,51 @@ wedstrijden['fluiten'] = wedstrijden['Thuis team'].isin(te_fluiten_teams)
 
 # selector voor wedstrijden
 wedstrijdenberekenen = wedstrijden.loc[(wedstrijden['fluiten'] == True)].copy()
-wedstrijdenberekenen.Wedstrijddatum_Aanvangstijd.apply(lambda dt: dt.date()).groupby([ wedstrijdenberekenen.Wedstrijddatum_Aanvangstijd.apply(lambda dt: dt.strftime('%Y-%m-%d'))]).count()
+#wedstrijdenberekenen.Wedstrijddatum_Aanvangstijd.apply(lambda dt: dt.date()).groupby([ wedstrijdenberekenen.Wedstrijddatum_Aanvangstijd.apply(lambda dt: dt.strftime('%Y-%m-%d'))]).count()
+#solution = [0,1,2,3,4,5,6]
+
 
 def fitness_func(solution, solution_idx):
     # Calculating the fitness value of each solution in the current population.
     # The fitness function calulates the sum of products between each input and its corresponding weight.
     x = 0
     fitness = 0
-    for scheidsrechter in solution:
+    start_time = time.time()
+    for i in range(len(solution)):
         #Checken of het toegewezen team kan fluiten op dit moment
-        wedstrijddag = wedstrijdenberekenen.iloc[x].Wedstrijddatum_Aanvangstijd
-        scheidsrechtervol = teams_beschikbaar[int(solution[x])]
+        wedstrijddag = wedstrijdenberekenen.iloc[i].Wedstrijddatum_Aanvangstijd
+        scheidsrechtervol = teams_beschikbaar[int(solution[i])]
+
         scheidsrechterzelfspelen = wedstrijden.loc[(wedstrijden['Wedstrijddatum_Aanvangstijd'].dt.strftime('%Y-%m-%d') == wedstrijddag.strftime('%Y-%m-%d')) & (wedstrijden['Team'] == scheidsrechtervol)]
+
         #Als ze helemaal niet hoeven te spelen die dag
         if len(scheidsrechterzelfspelen.index) == 0:
-            fitness += 1
-        elif scheidsrechterzelfspelen.iloc[0].fluiten_tot >= wedstrijdenberekenen.iloc[x].Wedstrijddatum_Aanvangstijd or wedstrijdenberekenen.iloc[x].Wedstrijddatum_Aanvangstijd >= scheidsrechterzelfspelen.iloc[0].fluiten_vanaf:
-            fitness += 1
+            fitness += 0
+        elif scheidsrechterzelfspelen.iloc[0].fluiten_tot >= wedstrijdenberekenen.iloc[i].Wedstrijddatum_Aanvangstijd or wedstrijdenberekenen.iloc[i].Wedstrijddatum_Aanvangstijd >= scheidsrechterzelfspelen.iloc[0].fluiten_vanaf:
+            fitness += 0
         else:
             fitness += -10000
 
-        #max aantal te fluiten wedstrijden per dag onder limiet toetsen
-        scheidsrechterdatummatrix =
-        x += 1
 
+    wedstrijdenberekenen.loc[:, 'Scheidsrechter'] = solution
+
+    scheidsrechterdatummatrix = pd.crosstab(wedstrijdenberekenen.Wedstrijddatum_Aanvangstijd.apply(lambda dt: dt.strftime('%Y-%m-%d')),wedstrijdenberekenen.Scheidsrechter)
+
+    #Checken dat er niet te vaak wordt gefloten
+    if scheidsrechterdatummatrix.values.max() > maxtefluitenperdag:
+            fitness += -100000
+
+    #Checken wat de variatie is tussen de teams in aantal te fluiten wedstrijden
+    fitness += -statistics.variance(scheidsrechterdatummatrix.sum())
 
     return fitness
 
 fitness_function = fitness_func
 
-num_generations = 1 # Number of generations.
+num_generations = 100 # Number of generations.
 num_parents_mating = 7 # Number of solutions to be selected as parents in the mating pool.
 
-sol_per_pop = 50 # Number of solutions in the population.
+sol_per_pop = 20 # Number of solutions in the population.
 num_genes = int(wedstrijdenberekenen['fluiten'].count())
 gene_space = [0,1,2,3,4,5,6]
 
@@ -78,7 +90,8 @@ ga_instance = pygad.GA(num_generations=num_generations,
                        sol_per_pop=sol_per_pop,
                        num_genes=num_genes,
                        on_generation=callback_generation,
-                       gene_space=gene_space)
+                       gene_space=gene_space,
+                       stop_criteria=["reach_1", "saturate_30"])
 
 # Running the GA to optimize the parameters of the function.
 ga_instance.run()
@@ -88,8 +101,6 @@ ga_instance.plot_fitness()
 
 solution, solution_fitness, solution_idx = ga_instance.best_solution()
 
-
-wedstrijdenberekenen.loc[:,'Scheidsrechter'] = solution
 
 
 print("Parameters of the best solution : {solution}".format(solution=solution))
