@@ -37,6 +37,41 @@ wedstrijden['tefluitensenior'] = wedstrijden['Thuis team'].isin(te_fluiten_teams
 # selector voor wedstrijden
 wedstrijdenberekenen = wedstrijden.loc[(wedstrijden['fluiten'] == True)].copy()
 
+teams_voor_spec_wedstrijd = []
+
+for i in range(len(wedstrijdenberekenen)):
+    # Checken of het toegewezen team kan fluiten op dit moment
+    wedstrijddag = wedstrijdenberekenen.iloc[i].Wedstrijddatum_Aanvangstijd
+    teams_voor_spec_wedstrijd.append([])
+
+    for j in range(len(teams_beschikbaar)):
+        scheidsrechtervol = teams_beschikbaar[j]
+
+        scheidsrechterzelfspelen = wedstrijden.loc[
+            (wedstrijden['Wedstrijddatum_Aanvangstijd'].dt.strftime('%Y-%m-%d') == wedstrijddag.strftime('%Y-%m-%d')) & (
+                        wedstrijden['Team'] == scheidsrechtervol)]
+
+        # checken of jeugdteam ook jeugs fluit
+        if scheidsrechtervol in teams_beschikbaar_junior and wedstrijdenberekenen.iloc[
+            i].Team in te_fluiten_teams_voor_junior:
+            if len(scheidsrechterzelfspelen.index) == 0:
+                teams_voor_spec_wedstrijd[i].append(j)
+            elif scheidsrechterzelfspelen.iloc[0].fluiten_tot >= wedstrijdenberekenen.iloc[
+                i].Wedstrijddatum_Aanvangstijd or \
+                    wedstrijdenberekenen.iloc[i].Wedstrijddatum_Aanvangstijd >= scheidsrechterzelfspelen.iloc[
+                0].fluiten_vanaf:
+                teams_voor_spec_wedstrijd[i].append(j)
+
+        elif scheidsrechtervol not in teams_beschikbaar_junior:
+            if len(scheidsrechterzelfspelen.index) == 0:
+                teams_voor_spec_wedstrijd[i].append(j)
+            elif scheidsrechterzelfspelen.iloc[0].fluiten_tot >= wedstrijdenberekenen.iloc[
+                i].Wedstrijddatum_Aanvangstijd or \
+                    wedstrijdenberekenen.iloc[i].Wedstrijddatum_Aanvangstijd >= scheidsrechterzelfspelen.iloc[
+                0].fluiten_vanaf:
+                teams_voor_spec_wedstrijd[i].append(j)
+
+gene_space = teams_voor_spec_wedstrijd
 
 
 def fitness_func(solution, solution_idx):
@@ -44,8 +79,6 @@ def fitness_func(solution, solution_idx):
     # The fitness function calulates the sum of products between each input and its corresponding weight.
     x = 0
     fitness = 0
-    start_time = time.time()
-    #TODO: parallel processing implementeren
     for i in range(len(solution)):
         #Checken of het toegewezen team kan fluiten op dit moment
         wedstrijddag = wedstrijdenberekenen.iloc[i].Wedstrijddatum_Aanvangstijd
@@ -74,14 +107,14 @@ def fitness_func(solution, solution_idx):
             fitness += -100000
 
     #Checken wat de variatie is tussen de teams in aantal te fluiten wedstrijden
-    fitness += 1 / statistics.variance(scheidsrechterdatummatrix.sum())
+    fitness += 10 - statistics.stdev(scheidsrechterdatummatrix.sum())
 
     #variatie tussen senioren
     wedstrijdenseniorberekenen = wedstrijdenberekenen.loc[(wedstrijdenberekenen['tefluitensenior'] == True)]
     scheidsrechterseniorendatummatrix = pd.crosstab(
         wedstrijdenseniorberekenen.Wedstrijddatum_Aanvangstijd.apply(lambda dt: dt.strftime('%Y-%m-%d')),
         wedstrijdenseniorberekenen.Scheidsrechter)
-    fitness += 1 / statistics.variance(scheidsrechterseniorendatummatrix.sum())
+    fitness += 10 - statistics.stdev(scheidsrechterseniorendatummatrix.sum())
 
     return fitness
 
@@ -99,13 +132,13 @@ class PooledGA(pygad.GA):
         pop_fitness = np.array(pop_fitness)
         return pop_fitness
 
-num_generations = 1600 # Number of generations.
-num_parents_mating = 2 # Number of solutions to be selected as parents in the mating pool.
+num_generations = 100 # Number of generations.
+num_parents_mating = 10 # Number of solutions to be selected as parents in the mating pool.
 
-sol_per_pop = 25 # Number of solutions in the population.
+sol_per_pop = 100 # Number of solutions in the population.
 num_genes = int(wedstrijdenberekenen['fluiten'].count())
 
-gene_space = list(range(len(teams_beschikbaar)))
+
 
 last_fitness = 0
 def callback_generation(ga_instance):
@@ -121,7 +154,8 @@ ga_instance = PooledGA(num_generations=num_generations,
                        on_generation=callback_generation,
                        gene_space=gene_space,
                        parent_selection_type="rank",
-                       crossover_type="scattered"
+                       crossover_type="scattered",
+                       mutation_probability=0.3
                        )
 
 # Running the GA to optimize the parameters of the function.
